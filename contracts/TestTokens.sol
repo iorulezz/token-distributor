@@ -11,3 +11,11 @@ contract PamelaToken is ERC20, Ownable {
         _mint(to, amount);
     }
 }
+
+contract AndreasToken is ERC20, Ownable {
+    constructor() ERC20("AndreasToken", "ADR") {}
+
+    function mint(address to, uint256 amount) public onlyOwner {
+        _mint(to, amount);
+    }
+}

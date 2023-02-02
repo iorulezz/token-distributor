@@ -153,7 +153,7 @@ describe("Batch Transaction Commander", function () {
 
   describe("Distribution", function () {
     it("Successful distribution", async function () {
-      const { admin, operator, tokenDeployer, pamela, andreas, distributor } =
+      const { operator, tokenDeployer, pamela, andreas, distributor } =
         await loadFixture(deployTokensAndDistributor);
 
       await pamela
@@ -180,6 +180,85 @@ describe("Batch Transaction Commander", function () {
         distributor
           .connect(operator)
           .distribute(andreas.address, addresses, amounts)
+      ).to.not.be.reverted;
+
+      await Promise.all(
+        addresses.map(async (address, index) => {
+          expect(await pamela.balanceOf(address)).to.equal(amounts[index]);
+          expect(await andreas.balanceOf(address)).to.equal(amounts[index]);
+        })
+      );
+    });
+
+    it("Successful distribution From", async function () {
+      const { admin, operator, tokenDeployer, pamela, andreas, distributor } =
+        await loadFixture(deployTokensAndDistributor);
+
+      const tokenHolder = (await ethers.getSigners())[3];
+
+      await pamela
+        .connect(tokenDeployer)
+        .mint(tokenHolder.address, ethers.utils.parseEther("1000"));
+
+      await andreas
+        .connect(tokenDeployer)
+        .mint(tokenHolder.address, ethers.utils.parseEther("1000"));
+
+      const accounts = (await ethers.getSigners()).slice(4, 7);
+      const addresses = accounts.map((account) => account.address);
+      const amounts = addresses.map((_, index) =>
+        ethers.utils.parseEther(`${index + 1}`)
+      );
+
+      // revert as token spending has not been approved
+      await expect(
+        distributor
+          .connect(operator)
+          .distributeFrom(
+            pamela.address,
+            tokenHolder.address,
+            addresses,
+            amounts
+          )
+      ).to.be.revertedWith("ERC20: insufficient allowance");
+      await expect(
+        distributor
+          .connect(operator)
+          .distributeFrom(
+            andreas.address,
+            tokenHolder.address,
+            addresses,
+            amounts
+          )
+      ).to.be.revertedWith("ERC20: insufficient allowance");
+
+      // approve spending
+      await pamela
+        .connect(tokenHolder)
+        .approve(distributor.address, ethers.utils.parseEther("6"));
+      await andreas
+        .connect(tokenHolder)
+        .approve(distributor.address, ethers.utils.parseEther("6"));
+
+      await expect(
+        distributor
+          .connect(operator)
+          .distributeFrom(
+            pamela.address,
+            tokenHolder.address,
+            addresses,
+            amounts
+          )
+      ).to.not.be.reverted;
+      await expect(
+        distributor
+          .connect(operator)
+          .distributeFrom(
+            andreas.address,
+            tokenHolder.address,
+            addresses,
+            amounts
+          )
       ).to.not.be.reverted;
 
       await Promise.all(

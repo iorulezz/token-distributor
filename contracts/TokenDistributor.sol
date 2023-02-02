@@ -66,12 +66,14 @@ contract TokenDistributor is AccessControl {
     ) external onlyRole(OPERATOR) {
         IERC20 token = IERC20(tokenAddress);
         require(addresses.length == amounts.length, "Invalid input parameters");
+        console.log("Distributing tokens of ", tokenAddress);
 
         for (uint256 i = 0; i < addresses.length; i++) {
             require(
                 token.transferFrom(sourceAddress, addresses[i], amounts[i]),
                 "Batch transfer failed."
             );
+            console.log("Sending amount ", amounts[i], " to address ", addresses[i]);
         }
     }
 

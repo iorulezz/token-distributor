@@ -152,6 +152,34 @@ describe("Batch Transaction Commander", function () {
   });
 
   describe("Distribution", function () {
+    it("Only operator can distribute or distributeFrom", async function () {
+      const { operator, tokenDeployer, pamela, andreas, distributor } =
+        await loadFixture(deployTokensAndDistributor);
+
+      const accounts = (await ethers.getSigners()).slice(3, 6);
+      const addresses = accounts.map((account) => account.address);
+      const amounts = addresses.map((_, index) =>
+        ethers.utils.parseEther(`${index + 1}`)
+      );
+
+      await expect(
+        distributor
+          .connect(accounts[0])
+          .distribute(pamela.address, addresses, amounts)
+      ).to.be.revertedWith(accessError(accounts[0].address, OPERATOR));
+
+      await expect(
+        distributor
+          .connect(accounts[0])
+          .distributeFrom(
+            pamela.address,
+            accounts[1].address,
+            addresses,
+            amounts
+          )
+      ).to.be.revertedWith(accessError(accounts[0].address, OPERATOR));
+    });
+
     it("Successful distribution", async function () {
       const { operator, tokenDeployer, pamela, andreas, distributor } =
         await loadFixture(deployTokensAndDistributor);

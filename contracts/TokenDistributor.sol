@@ -8,37 +8,68 @@ import "hardhat/console.sol";
 contract TokenDistributor is AccessControl {
     bytes32 private constant OPERATOR = keccak256("OPERATOR");
 
-    // mapping for which contracts you can operate with EXPLORE THIS OPTION FOR GAS
-
     constructor() {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
-    modifier notZero(address operator) {
-        require(
-            operator != address(0),
-            "The zero address is not allowed as input"
-        );
-        _;
-    }
-
-    // TODO: Add missing events
-    // event definitions
     event Withdrawal(
         address indexed tokenAddress,
         address indexed targetAddress,
         uint256 amount
     );
 
-    function addOperator(address operator) external notZero(operator) {
+    event TokenDistribution(
+        address indexed tokenAddress,
+        address indexed sourceAddress,
+        uint256 totalAmount
+    );
+
+    /**
+     *
+     * @dev See {AccessControl-grantRole}
+     * Note that in the current setup we do not have access to the
+     * list of all operators
+     *
+     * @param operator the operator's address to be added
+     *
+     * Requirements:
+     * - Only The admin of OPERATOR role can grant it
+     *
+     */
+    function addOperator(address operator) external {
         grantRole(OPERATOR, operator);
     }
 
-    function revokeOperator(address operator) external notZero(operator) {
+    /**
+     *
+     * @dev See {AccessControl-revokeRole}
+     *
+     * @param operator the address to be revoked from the operator role
+     *
+     * Requirements:
+     * - Only The admin of OPERATOR role can revoke it
+     *
+     */
+    function revokeOperator(address operator) external {
         revokeRole(OPERATOR, operator);
     }
 
-    // To distribute tokens from Contract to the provided list of token holders with respective amount
+     /**
+     *
+     * @dev The contract that correpsonds to the tokenAddress is 
+     * invoked through the IERC20 interface for each call. 
+     * The same applies for the rest of the functions below.
+     *
+     * @param tokenAddress the address of the token to be distributed
+     * @param addresses list of addresses
+     * @param amounts list of amounts
+     *
+     * Requirements:
+     * - tokenAddress corresponds to an ERC20 contract
+     * - The length of the two input lists matches
+     * - There are enough tokens to spend
+     *
+     */
     function distribute(
         address tokenAddress,
         address[] calldata addresses,
@@ -46,18 +77,32 @@ contract TokenDistributor is AccessControl {
     ) external onlyRole(OPERATOR) {
         IERC20 token = IERC20(tokenAddress);
         require(addresses.length == amounts.length, "Invalid input parameters");
-        console.log("Distributing tokens of ", tokenAddress);
-
+        uint256 totalAmount = 0;
         for (uint256 i = 0; i < addresses.length; i++) {
             require(
                 token.transfer(addresses[i], amounts[i]),
-                "Batch transfer failed."
+                "Token distribution failed."
             );
-            console.log("Sending amount ", amounts[i], " to address ", addresses[i]);
+            totalAmount += amounts[i];
         }
+        emit TokenDistribution(tokenAddress, address(this), totalAmount);
     }
 
-    // to distribute tokens held at a different address. msg.sender must be approved to spend.
+    /**
+     *
+     * @param tokenAddress the address of the token to be distributed
+     * @param sourceAddress the address where the tokens will be spent from
+     * @param addresses list of addresses
+     * @param amounts list of amounts
+     *
+     * Requirements:
+     * - tokenAddress corresponds to an ERC20 contract
+     * - The length of the two input lists matches
+     * - The address of this contract is approved for spending tokens of 
+     *   tokenAddress from sourceAddress
+     * - There are enough tokens to spend
+     *
+     */
     function distributeFrom(
         address tokenAddress,
         address sourceAddress,
@@ -66,21 +111,31 @@ contract TokenDistributor is AccessControl {
     ) external onlyRole(OPERATOR) {
         IERC20 token = IERC20(tokenAddress);
         require(addresses.length == amounts.length, "Invalid input parameters");
-        console.log("Distributing tokens of ", tokenAddress);
-
+        uint256 totalAmount = 0;
         for (uint256 i = 0; i < addresses.length; i++) {
             require(
                 token.transferFrom(sourceAddress, addresses[i], amounts[i]),
-                "Batch transfer failed."
+                "Token distribution failed."
             );
-            console.log("Sending amount ", amounts[i], " to address ", addresses[i]);
+            totalAmount += amounts[i];
         }
+        emit TokenDistribution(tokenAddress, sourceAddress, totalAmount);
     }
 
-    // TODO: add function to mint and distribute,
-    // NOTE: you have to be the owner of the token contract
-
-    // Withdraw tokens held at this contract
+    /**
+     *
+     * @param tokenAddress the address of the token to be withdrawan
+     * @param targetAddress the address where the tokens will be sent
+     * @param amount list of amount
+     *
+     * Requirements:
+     * - tokenAddress corresponds to an ERC20 contract
+     * - The length of the two input lists matches
+     * - The address of this contract is approved for spending tokens of 
+     *   tokenAddress from sourceAddress
+     * - There are enough tokens to spend
+     *
+     */
     function withdraw(
         address tokenAddress,
         address targetAddress,
@@ -90,8 +145,4 @@ contract TokenDistributor is AccessControl {
         require(token.transfer(targetAddress, amount), "Withdrawal failed.");
         emit Withdrawal(tokenAddress, targetAddress, amount);
     }
-
-    // Add token in the mapping of operatable tokens
-    // CHECK: Is it better gas-wise to save IERC20 objects? e.g. mapping address => IERC20
-    // Alternative would be to give the address and create the IRC20 object for each operation
 }

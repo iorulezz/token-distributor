@@ -40,9 +40,32 @@ describe("Batch Transaction Commander", function () {
   }
 
   describe("Deployment", function () {
-    it("Empty Test", async function () {});
+    it("Should set the right roles", async function () {
+      const { distributor, admin, operator } = await loadFixture(
+        deployTokensAndDistributor
+      );
 
-    it("Should set the right owner", async function () {});
+      expect(await distributor.hasRole(ADMIN, admin.address)).to.be.true;
+      expect(await distributor.hasRole(OPERATOR, operator.address)).to.be.true;
+      expect(await distributor.hasRole(ADMIN, operator.address)).to.be.false;
+      expect(await distributor.getRoleAdmin(OPERATOR)).to.equal(ADMIN);
+    });
+
+    it("Try to call on non-contract address", async function () {
+      const { operator, tokenDeployer, distributor } = await loadFixture(
+        deployTokensAndDistributor
+      );
+
+      await expect(
+        distributor
+          .connect(operator)
+          .withdraw(
+            tokenDeployer.address,
+            operator.address,
+            ethers.utils.parseEther("1")
+          )
+      ).to.be.reverted;
+    });
   });
 
   describe("Deposits and Withdrawals", function () {
@@ -106,9 +129,17 @@ describe("Batch Transaction Commander", function () {
 
       expect(await pamela.balanceOf(operator.address)).to.equal(0);
 
-      await distributor
-        .connect(operator)
-        .withdraw(
+      await expect(
+        distributor
+          .connect(operator)
+          .withdraw(
+            pamela.address,
+            operator.address,
+            ethers.utils.parseEther("1")
+          )
+      )
+        .to.emit(distributor, "Withdrawal")
+        .withArgs(
           pamela.address,
           operator.address,
           ethers.utils.parseEther("1")
@@ -180,6 +211,34 @@ describe("Batch Transaction Commander", function () {
       ).to.be.revertedWith(accessError(accounts[0].address, OPERATOR));
     });
 
+    it("Check input data is correct", async function () {
+      const { operator, tokenDeployer, pamela, distributor } =
+        await loadFixture(deployTokensAndDistributor);
+
+      const accounts = (await ethers.getSigners()).slice(3, 6);
+      const addresses = accounts.map((account) => account.address);
+      const amounts = addresses
+        .map((_, index) => ethers.utils.parseEther(`${index + 1}`))
+        .slice(1);
+
+      await expect(
+        distributor
+          .connect(operator)
+          .distribute(pamela.address, addresses, amounts)
+      ).to.be.revertedWith("Invalid input parameters");
+
+      await expect(
+        distributor
+          .connect(operator)
+          .distributeFrom(
+            pamela.address,
+            tokenDeployer.address,
+            addresses,
+            amounts
+          )
+      ).to.be.revertedWith("Invalid input parameters");
+    });
+
     it("Successful distribution", async function () {
       const { operator, tokenDeployer, pamela, andreas, distributor } =
         await loadFixture(deployTokensAndDistributor);
@@ -202,13 +261,25 @@ describe("Batch Transaction Commander", function () {
         distributor
           .connect(operator)
           .distribute(pamela.address, addresses, amounts)
-      ).to.not.be.reverted;
+      )
+        .to.emit(distributor, "TokenDistribution")
+        .withArgs(
+          pamela.address,
+          distributor.address,
+          ethers.utils.parseEther("6")
+        );
 
       await expect(
         distributor
           .connect(operator)
           .distribute(andreas.address, addresses, amounts)
-      ).to.not.be.reverted;
+      )
+        .to.emit(distributor, "TokenDistribution")
+        .withArgs(
+          andreas.address,
+          distributor.address,
+          ethers.utils.parseEther("6")
+        );
 
       await Promise.all(
         addresses.map(async (address, index) => {
@@ -277,7 +348,13 @@ describe("Batch Transaction Commander", function () {
             addresses,
             amounts
           )
-      ).to.not.be.reverted;
+      )
+        .to.emit(distributor, "TokenDistribution")
+        .withArgs(
+          pamela.address,
+          tokenHolder.address,
+          ethers.utils.parseEther("6")
+        );
       await expect(
         distributor
           .connect(operator)
@@ -287,7 +364,13 @@ describe("Batch Transaction Commander", function () {
             addresses,
             amounts
           )
-      ).to.not.be.reverted;
+      )
+        .to.emit(distributor, "TokenDistribution")
+        .withArgs(
+          andreas.address,
+          tokenHolder.address,
+          ethers.utils.parseEther("6")
+        );
 
       await Promise.all(
         addresses.map(async (address, index) => {
@@ -295,33 +378,6 @@ describe("Batch Transaction Commander", function () {
           expect(await andreas.balanceOf(address)).to.equal(amounts[index]);
         })
       );
-    });
-  });
-
-  describe("Events", function () {
-    it("Withdrawal should emit an event", async function () {
-      const { distributor, pamela, tokenDeployer, operator } =
-        await loadFixture(deployTokensAndDistributor);
-
-      await pamela
-        .connect(tokenDeployer)
-        .mint(distributor.address, ethers.utils.parseEther("1000"));
-
-      await expect(
-        distributor
-          .connect(operator)
-          .withdraw(
-            pamela.address,
-            operator.address,
-            ethers.utils.parseEther("1")
-          )
-      )
-        .to.emit(distributor, "Withdrawal")
-        .withArgs(
-          pamela.address,
-          operator.address,
-          ethers.utils.parseEther("1")
-        );
     });
   });
 });

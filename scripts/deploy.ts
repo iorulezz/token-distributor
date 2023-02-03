@@ -1,10 +1,10 @@
 import { ethers } from "hardhat";
 
 async function main() {
-  const Pamela = await ethers.getContractFactory("PamelaToken");
-  const pamela = await Pamela.deploy();
-  await pamela.deployed();
-  console.log(`PamelaToken deployed to ${pamela.address}`);
+  const Distributor = await ethers.getContractFactory("TokenDistributor");
+  const distributor = await Distributor.deploy();
+  await distributor.deployed();
+  console.log(`TokenDistributor deployed to ${distributor.address}`);
 }
 
 // We recommend this pattern to be able to use async/await everywhere
